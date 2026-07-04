@@ -1,11 +1,19 @@
-use submission::help_fun::get_size_string;
-use std::{collections::HashMap, env};
 use std::fs;
+use std::{collections::HashMap, env};
+use submission::help_fun::get_size_string;
 
 use aligned_vec::ABox;
-use auto_base_conv::{AES_TIGHT, AesParam, AutomorphKey, AutomorphKeySerializable, GlweKeyswitchKeyOwned, gen_all_auto_keys, generate_scheme_switching_key, keygen_pbs_with_glwe_ks};
-use tfhe::core_crypto::{prelude::{ActivatedRandomGenerator, EncryptionRandomGenerator, GgswCiphertextList, GlweSecretKeyOwned, LweBootstrapKeyOwned, LweSecretKeyOwned, SecretRandomGenerator}, seeders::new_seeder};
+use auto_base_conv::{
+    AES_SET_2, AesParam, AutomorphKey, AutomorphKeySerializable, GlweKeyswitchKeyOwned, gen_all_auto_keys, generate_scheme_switching_key, keygen_pbs_with_glwe_ks
+};
 use tfhe::core_crypto::fft_impl::fft64::c64;
+use tfhe::core_crypto::{
+    prelude::{
+        ActivatedRandomGenerator, EncryptionRandomGenerator, GgswCiphertextList,
+        GlweSecretKeyOwned, LweBootstrapKeyOwned, LweSecretKeyOwned, SecretRandomGenerator,
+    },
+    seeders::new_seeder,
+};
 
 pub fn generate_fhe_keys(
     param: &AesParam<u64>,
@@ -54,7 +62,7 @@ pub fn generate_fhe_keys(
         secret_generator,
         encryption_generator,
     );
-    
+
     let ss_key = generate_scheme_switching_key(
         &glwe_sk,
         ss_base_log,
@@ -77,17 +85,16 @@ pub fn generate_fhe_keys(
     (lwe_sk, glwe_sk, bsk, ksk, auto_keys, ss_key)
 }
 
-
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
         eprintln!("Usage: {} <size>", args[0]);
-        std::process::exit(1); 
+        std::process::exit(1);
     }
     let size = args[1].clone();
     let io_dir = "io/".to_owned() + get_size_string(size.parse::<usize>()?);
-   
-    let param = &*AES_TIGHT;
+
+    let param = AES_SET_2.clone(); //AES_TIGHT
     let mut boxed_seeder = new_seeder();
     let seeder = boxed_seeder.as_mut();
     let mut secret_generator =
@@ -95,39 +102,36 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut encryption_generator =
         EncryptionRandomGenerator::<ActivatedRandomGenerator>::new(seeder.seed(), seeder);
 
-    let fhe_keys =
-        generate_fhe_keys(param, &mut secret_generator, &mut encryption_generator);
-    
+    let fhe_keys = generate_fhe_keys(&param, &mut secret_generator, &mut encryption_generator);
+
     let (lwe_sk, glwe_sk, bsk, ksk, auto_keys, ss_key) = fhe_keys;
     let serialize_auto_keys = auto_keys
         .into_iter()
         .map(|(k, v)| (k, v.to_serializable()))
         .collect::<HashMap<usize, AutomorphKeySerializable>>();
 
-    
     // create secret keys directory
     let secret_keys_dir = format!("{}/secret_keys", io_dir);
     let public_keys_dir = format!("{}/public_keys", io_dir);
     fs::create_dir_all(&secret_keys_dir)?;
     fs::create_dir_all(&public_keys_dir)?;
-    
+
     // save secret keys
     let lwe_sk_path = format!("{}/lwe_sk.bin", secret_keys_dir);
     let glwe_sk_path = format!("{}/glwe_sk.bin", secret_keys_dir);
     fs::write(&lwe_sk_path, bincode::serialize(&lwe_sk)?)?;
     fs::write(&glwe_sk_path, bincode::serialize(&glwe_sk)?)?;
-    
+
     // save public/evaluation keys
     let bsk_path = format!("{}/bsk.bin", public_keys_dir);
     let ksk_path = format!("{}/ksk.bin", public_keys_dir);
     let auto_keys_path = format!("{}/auto_keys.bin", public_keys_dir);
     let ss_key_path = format!("{}/ss_key.bin", public_keys_dir);
-    
+
     fs::write(&bsk_path, bincode::serialize(&bsk)?)?;
     fs::write(&ksk_path, bincode::serialize(&ksk)?)?;
     fs::write(&auto_keys_path, bincode::serialize(&serialize_auto_keys)?)?;
     fs::write(&ss_key_path, bincode::serialize(&ss_key)?)?;
-        
 
     Ok(())
 }

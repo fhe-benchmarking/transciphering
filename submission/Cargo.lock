@@ -521,6 +521,7 @@ dependencies = [
  "chrono",
  "itertools 0.14.0",
  "rand",
+ "rayon",
  "serde",
  "tfhe 0.5.4",
 ]

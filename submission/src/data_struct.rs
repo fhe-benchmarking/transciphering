@@ -1,6 +1,6 @@
 use auto_base_conv::{AesParam, generate_vec_keyed_lut_accumulator};
 use serde::{Deserialize, Serialize};
-use tfhe::core_crypto::prelude::{ActivatedRandomGenerator, CastInto, EncryptionRandomGenerator, GlweCiphertext, GlweCiphertextList, GlweSecretKey, PlaintextList, allocate_and_trivially_encrypt_new_glwe_ciphertext};
+use tfhe::core_crypto::{entities::LweCiphertextList, prelude::{ActivatedRandomGenerator, CastInto, EncryptionRandomGenerator, GlweCiphertext, GlweCiphertextList, GlweSecretKey, PlaintextList, allocate_and_trivially_encrypt_new_glwe_ciphertext}};
 
 use crate::aes_manager::{Aes128Manager, BYTESIZE};
 
@@ -24,6 +24,14 @@ pub struct AllRdKeys {
     )>,
     pub _0_round_key: Vec<Vec<GlweCiphertext<Vec<u64>>>>,
 }
+
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct AllRdKeys2 {
+    pub _0_round_key: Vec<Vec<GlweCiphertextList<Vec<u64>>>>,
+    pub other_round_keys: Vec<LweCiphertextList<Vec<u64>>>,
+}
+
 
 ///////////////////////////// local helper functions /////////////////////////////
 

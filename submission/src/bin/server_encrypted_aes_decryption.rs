@@ -3,14 +3,23 @@ use std::env;
 use std::fs;
 
 use aligned_vec::ABox;
+use auto_base_conv::AES_SET_2;
+use rayon::prelude::*;
+use auto_base_conv::he_add_round_key;
+use auto_base_conv::he_mix_columns_precomp;
+use auto_base_conv::he_shift_rows;
+use auto_base_conv::he_sub_bytes_8_to_24_by_patched_wwlp_cbs;
+use auto_base_conv::he_sub_bytes_by_patched_wwlp_cbs;
 use auto_base_conv::{
     byte_array_to_mat, byte_mat_to_array, convert_standard_glwe_keyswitch_key_to_fourier,
     get_he_state_byte, get_he_state_byte_mut, glwe_ciphertext_monic_monomial_div_assign,
     keyswitch_lwe_ciphertext_by_glwe_keyswitch, known_rotate_keyed_lut,
     lwe_ciphertext_list_add_assign, lwe_msb_bit_to_glev_by_trace_with_preprocessing, switch_scheme,
-    AesParam, AutomorphKey, AutomorphKeySerializable, FftType, FourierGlweKeyswitchKey,
-    GlweKeyswitchKeyOwned, AES_TIGHT,
+    AesParam, AutomorphKey, AutomorphKeySerializable, FourierGlweKeyswitchKey,
+    GlweKeyswitchKeyOwned,
 };
+use submission::aes_ref::NUM_ROUNDS;
+use submission::data_struct::AllRdKeys2;
 use submission::{
     aes_manager::{StateByteMat, BLOCKSIZE_IN_BIT, BYTESIZE, NUM_COLUMNS, NUM_ROWS},
     data_struct::AllRdKeys,
@@ -24,6 +33,148 @@ use tfhe::core_crypto::fft_impl::fft64::{
     },
 };
 use tfhe::core_crypto::prelude::*;
+
+pub fn aes_to_lwe_trasnciphering_2<KSKeyCont>(
+    ciphertext: &[u8; 16],
+    parms: &AesParam<u64>,
+    all_rd_key: &AllRdKeys2,
+    fft_bsk: &FourierLweBootstrapKey<ABox<[c64]>>,
+    fft_ksk: &FourierGlweKeyswitchKey<KSKeyCont>,
+    auto_key: &HashMap<usize, AutomorphKey<ABox<[c64]>>>,
+    ss_key: &FourierGgswCiphertextList<Vec<c64>>,
+) -> LweCiphertextList<Vec<u64>>
+where
+    KSKeyCont: Container<Element = c64>,
+{
+    let fft_bsk_lwe_size = fft_bsk.output_lwe_dimension().to_lwe_size();
+    let ciphertext_modulus = parms.ciphertext_modulus();
+    let mut he_state = LweCiphertextList::new(
+        0u64,
+        fft_bsk_lwe_size,
+        LweCiphertextCount(BLOCKSIZE_IN_BIT),
+        ciphertext_modulus,
+    );
+    let mut he_state_mult_by_2 = LweCiphertextList::new(
+        0u64,
+        fft_bsk_lwe_size,
+        LweCiphertextCount(BLOCKSIZE_IN_BIT),
+        ciphertext_modulus,
+    );
+    let mut he_state_mult_by_3 = LweCiphertextList::new(
+        0u64,
+        fft_bsk_lwe_size,
+        LweCiphertextCount(BLOCKSIZE_IN_BIT),
+        ciphertext_modulus,
+    );
+    let mut he_state_ks = LweCiphertextList::new(
+        0u64,
+        parms.lwe_dimension().to_lwe_size(),
+        LweCiphertextCount(BLOCKSIZE_IN_BIT),
+        ciphertext_modulus,
+    );
+
+    let vec_keyed_sbox_round_1 = &all_rd_key._0_round_key[0];
+    let vec_keyed_sbox_round_1_mult_by_2 = &all_rd_key._0_round_key[1];
+    let vec_keyed_sbox_round_1_mult_by_3 = &all_rd_key._0_round_key[2];
+
+    he_state.as_mut().fill(0u64);
+    for (bit_idx, mut he_bit) in he_state.iter_mut().enumerate() {
+        let byte_idx = bit_idx / 8;
+        let pt = (ciphertext[byte_idx] & (1 << bit_idx)) >> bit_idx;
+        *he_bit.get_mut_body().data += (pt as u64) << 63;
+    }
+
+    {
+        // r = 1
+        // Keyed LUT
+        known_rotate_keyed_lut(*ciphertext, vec_keyed_sbox_round_1, &mut he_state);
+        known_rotate_keyed_lut(
+            *ciphertext,
+            vec_keyed_sbox_round_1_mult_by_2,
+            &mut he_state_mult_by_2,
+        );
+        known_rotate_keyed_lut(
+            *ciphertext,
+            vec_keyed_sbox_round_1_mult_by_3,
+            &mut he_state_mult_by_3,
+        );
+
+        // ShiftRows
+        he_shift_rows(&mut he_state);
+        he_shift_rows(&mut he_state_mult_by_2);
+        he_shift_rows(&mut he_state_mult_by_3);
+
+        // MixColumns
+        he_mix_columns_precomp(&mut he_state, &he_state_mult_by_2, &he_state_mult_by_3);
+
+        // AddRoundKey
+        he_add_round_key(&mut he_state, &all_rd_key.other_round_keys[1]);
+    }
+
+    for r in 2..NUM_ROUNDS {
+        // LWE KS
+        for (lwe, mut lwe_ks) in he_state.iter().zip(he_state_ks.iter_mut()) {
+            keyswitch_lwe_ciphertext_by_glwe_keyswitch(&lwe, &mut lwe_ks, fft_ksk);
+        }
+
+        // SubBytes
+        he_sub_bytes_8_to_24_by_patched_wwlp_cbs(
+            &he_state_ks,
+            &mut he_state,
+            &mut he_state_mult_by_2,
+            &mut he_state_mult_by_3,
+            fft_bsk.as_view(),
+            auto_key,
+            ss_key.as_view(),
+            parms.cbs_base_log(),
+            parms.cbs_level(),
+            parms.log_lut_count(),
+        );
+
+        // ShiftRows
+        he_shift_rows(&mut he_state);
+        he_shift_rows(&mut he_state_mult_by_2);
+        he_shift_rows(&mut he_state_mult_by_3);
+
+        // MixColumns
+        he_mix_columns_precomp(&mut he_state, &he_state_mult_by_2, &he_state_mult_by_3);
+
+        // AddRoundKey
+        he_add_round_key(&mut he_state, &all_rd_key.other_round_keys[r]);
+    }
+
+    // Final Round LWE KS
+    for (lwe, mut lwe_ks) in he_state.iter().zip(he_state_ks.iter_mut()) {
+        keyswitch_lwe_ciphertext_by_glwe_keyswitch(&lwe, &mut lwe_ks, fft_ksk);
+    }
+
+    // Final Round SubBytes
+    he_sub_bytes_by_patched_wwlp_cbs(
+        &he_state_ks,
+        &mut he_state,
+        fft_bsk.as_view(),
+        auto_key,
+        ss_key.as_view(),
+        parms.cbs_base_log(),
+        parms.cbs_level(),
+        parms.log_lut_count(),
+    );
+
+    // Final Round ShiftRows
+    he_shift_rows(&mut he_state);
+
+    // Final Round AddRoundKey
+    he_add_round_key(&mut he_state, &all_rd_key.other_round_keys[NUM_ROUNDS]);
+    for mut chunk in he_state.chunks_exact_mut(BYTESIZE) {
+        let mut tmp: Vec<Vec<u64>> = chunk.iter().map(|ct| ct.as_ref().to_vec()).collect();
+
+        for i in 0..BYTESIZE {
+            let src = &tmp[BYTESIZE - 1 - i];
+            chunk.get_mut(i).as_mut().clone_from_slice(src.as_ref());
+        }
+    }
+    he_state
+}
 
 pub fn aes_to_lwe_trasnciphering<KSKeyCont>(
     ciphertext: &[u8; 16],
@@ -606,16 +757,6 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let io_dir = "io/".to_owned() + get_size_string(size.parse::<usize>()?);
     let data_dir = "datasets/".to_owned() + get_size_string(size.parse::<usize>()?);
 
-    // Load AES ciphertext from hex file
-    let aes_cipher_hex_path = format!("{}/db.hex", data_dir);
-    let hex_string = fs::read_to_string(&aes_cipher_hex_path)?.trim().to_string();
-
-    let mut aes_cipher: [u8; 16] = [0u8; 16];
-    for (i, byte) in aes_cipher.iter_mut().enumerate() {
-        let hex_pair = &hex_string[i * 2..i * 2 + 2];
-        *byte = u8::from_str_radix(hex_pair, 16)?;
-    }
-
     // Load keys from directories
     let public_keys_dir = format!("{}/public_keys", io_dir);
     let ciphertext_upload_dir = format!("{}/ciphertexts_upload", io_dir);
@@ -632,9 +773,8 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ss_key: GgswCiphertextListOwned<u64> = bincode::deserialize(&ss_key_bytes)?;
     let auto_keys_serialize: HashMap<usize, AutomorphKeySerializable> =
         bincode::deserialize(&auto_keys_bytes)?;
-    let trans_key: AllRdKeys = bincode::deserialize(&trans_key_bytes)?;
 
-    let param = &*AES_TIGHT;
+    let param = AES_SET_2.clone();
 
     // Convert serializable automorph keys back to standard form
     let auto_keys: HashMap<usize, AutomorphKey<ABox<[c64]>>> = auto_keys_serialize
@@ -686,22 +826,117 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         convert_standard_ggsw_ciphertext_to_fourier(&ggsw, &mut fourier_ggsw);
     }
 
-    let mut result = aes_to_lwe_trasnciphering(
-        &aes_cipher,
-        param,
-        trans_key,
-        fourier_bsk,
-        fourier_glwe_ksk,
-        auto_keys,
-        fourier_ss_key,
-    );
+    if size == "0" {
+        let trans_key: AllRdKeys = bincode::deserialize(&trans_key_bytes)?;
 
-    // Create output directory and save result
-    let ciphertext_download_dir = format!("{}/ciphertext_aes_download", io_dir);
-    fs::create_dir_all(&ciphertext_download_dir)?;
+        // Load AES ciphertext from hex file
+        let aes_cipher_hex_path = format!("{}/db.hex", data_dir);
+        let hex_string = fs::read_to_string(&aes_cipher_hex_path)?.trim().to_string();
 
-    let result_path = format!("{}/result.bin", ciphertext_download_dir);
-    fs::write(&result_path, bincode::serialize(&result)?)?;
+        let mut aes_cipher: [u8; 16] = [0u8; 16];
+        for (i, byte) in aes_cipher.iter_mut().enumerate() {
+            let hex_pair = &hex_string[i * 2..i * 2 + 2];
+            *byte = u8::from_str_radix(hex_pair, 16)?;
+        }
+        let result = aes_to_lwe_trasnciphering(
+            &aes_cipher,
+            &param,
+            trans_key,
+            fourier_bsk,
+            fourier_glwe_ksk,
+            auto_keys,
+            fourier_ss_key,
+        );
+        // Create output directory and save result
+        let ciphertext_download_dir = format!("{}/ciphertext_aes_download", io_dir);
+        fs::create_dir_all(&ciphertext_download_dir)?;
+
+        let result_path = format!("{}/result.bin", ciphertext_download_dir);
+        fs::write(&result_path, bincode::serialize(&result)?)?;
+    } else if size == "1" || size == "2" {
+        let trans_key: AllRdKeys2 = bincode::deserialize(&trans_key_bytes)?;
+
+        // Load AES ciphertext from hex file
+        let aes_cipher_hex_path = format!("{}/db.hex", data_dir);
+        let hex_string = fs::read_to_string(&aes_cipher_hex_path)?.trim().to_string();
+        let cipher_size = if size == "1" { 128 } else { 1024 };
+        let mut aes_cipher = vec![0u8; cipher_size];
+        for (i, byte) in aes_cipher.iter_mut().enumerate() {
+            let hex_pair = &hex_string[i * 2..i * 2 + 2];
+            *byte = u8::from_str_radix(hex_pair, 16)?;
+        }
+
+        let aes_iv_path = format!("{}/aes_iv.hex", data_dir);
+        let aes_iv_hex = fs::read_to_string(&aes_iv_path)?.trim().to_string();
+        let mut aes_iv: [u8; 16] = [0u8; 16];
+        for (i, byte) in aes_iv.iter_mut().enumerate() {
+            let hex_pair = &aes_iv_hex[i * 2..i * 2 + 2];
+            *byte = u8::from_str_radix(hex_pair, 16)?;
+        }
+        let lwe_size = fourier_bsk.output_lwe_dimension().to_lwe_size();
+        let num_blocks = aes_cipher.len() / 16;
+
+        // Pre-compute all counter values
+        let mut counters: Vec<[u8; 16]> = Vec::with_capacity(num_blocks);
+        let mut counter = aes_iv;
+        for _ in 0..num_blocks {
+            counters.push(counter);
+            for byte in counter.iter_mut().rev() {
+                *byte = byte.wrapping_add(1);
+                if *byte != 0 {
+                    break;
+                }
+            }
+        }
+
+        // Process blocks in parallel
+        let all_results: Vec<LweCiphertextList<Vec<u64>>> = aes_cipher
+            .par_chunks(16)
+            .zip(counters.par_iter())
+            .map(|(chunk, counter)| {
+                let current_block: [u8; 16] = chunk.try_into().unwrap();
+
+                let mut result = aes_to_lwe_trasnciphering_2(
+                    counter,
+                    &param,
+                    &trans_key,
+                    &fourier_bsk,
+                    &fourier_glwe_ksk,
+                    &auto_keys,
+                    &fourier_ss_key,
+                );
+
+                for (bit_idx, mut lwe) in result.iter_mut().enumerate() {
+                    let byte_idx = bit_idx / 8;
+                    let bit = (current_block[byte_idx] >> (7 - (bit_idx % 8))) & 1;
+                    lwe_ciphertext_plaintext_add_assign(&mut lwe, Plaintext((bit as u64) << 63));
+                }
+
+                result
+            })
+            .collect();
+
+        let total_bits = BLOCKSIZE_IN_BIT * num_blocks;
+        let mut merged_result = LweCiphertextList::new(
+            0u64,
+            lwe_size,
+            LweCiphertextCount(total_bits),
+            param.ciphertext_modulus(),
+        );
+        let block_elems = BLOCKSIZE_IN_BIT * (lwe_size.0 as usize);
+        let mut offset = 0;
+        for result in &all_results {
+            merged_result.as_mut()[offset..offset + block_elems].copy_from_slice(result.as_ref());
+            offset += block_elems;
+        }
+
+        let ciphertext_download_dir = format!("{}/ciphertext_aes_download", io_dir);
+        fs::create_dir_all(&ciphertext_download_dir)?;
+        let result_path = format!("{}/result.bin", ciphertext_download_dir);
+        fs::write(&result_path, bincode::serialize(&merged_result)?)?;
+    } else {
+        return Err(format!("Invalid size argument: {}. Expected 0, 1, or 2.", size).into());
+    }
 
     Ok(())
 }

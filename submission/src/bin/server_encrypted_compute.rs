@@ -2,33 +2,24 @@ use std::collections::HashMap;
 use std::env;
 use std::fs;
 
-use aes::cipher;
 use aligned_vec::ABox;
+use auto_base_conv::AES_SET_2;
 use auto_base_conv::convert_lwe_to_glwe_const;
-use auto_base_conv::fourier_glev_ciphertext;
-use auto_base_conv::glwe_keyswitch;
+
 use auto_base_conv::keyswitch_lwe_ciphertext_by_glwe_keyswitch;
 use auto_base_conv::lwe_msb_bit_to_glev_by_trace_with_preprocessing;
 use auto_base_conv::switch_scheme;
 use auto_base_conv::{
     convert_standard_glwe_keyswitch_key_to_fourier, AutomorphKey, AutomorphKeySerializable,
-    FourierGlweKeyswitchKey, GlweKeyswitchKeyOwned, AES_TIGHT,
+    FourierGlweKeyswitchKey, GlweKeyswitchKeyOwned,
 };
-use bincode::de;
 use itertools::izip;
-use submission::{
-    aes_manager::{StateByteMat, BLOCKSIZE_IN_BIT, BYTESIZE, NUM_COLUMNS, NUM_ROWS},
-    data_struct::AllRdKeys,
-    help_fun::get_size_string,
-};
-use tfhe::core_crypto::fft_impl::fft128::crypto::ggsw::cmux;
-use tfhe::core_crypto::fft_impl::fft64::{
-    c64,
-    crypto::{
-        bootstrap::FourierLweBootstrapKeyView,
-        ggsw::{FourierGgswCiphertextListMutView, FourierGgswCiphertextListView},
-    },
-};
+use submission::
+    help_fun::get_size_string
+;
+use tfhe::core_crypto::fft_impl::fft64::
+    c64
+;
 use tfhe::core_crypto::prelude::*;
 
 fn max_of_two<Scalar, Cont, MutCont>(
@@ -77,7 +68,6 @@ fn max_of_two<Scalar, Cont, MutCont>(
     {
         convert_lwe_to_glwe_const(&lwe_a, &mut glwe_b);
         convert_lwe_to_glwe_const(&lwe_b, &mut glwe_a);
-        convert_lwe_to_glwe_const(&lwe_b, &mut glwe_a);
         for (ggsw_a, ggsw_b) in input_a.iter().rev().zip(input_b.iter().rev()) {
             convert_standard_ggsw_ciphertext_to_fourier(&ggsw_a, &mut fourier_ggsw_a);
             convert_standard_ggsw_ciphertext_to_fourier(&ggsw_b, &mut fourier_ggsw_b);
@@ -111,7 +101,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     fs::create_dir_all(&target_dir)?;
 
     // load params
-    let param = &*AES_TIGHT;
+    let param = AES_SET_2.clone(); //AES_TIGHT
     let glwe_size = param.glwe_dimension().to_glwe_size();
     let polynomial_size = param.polynomial_size();
     let ks_base_log = param.glwe_ds_base_log();
@@ -142,7 +132,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let auto_keys_serialize: HashMap<usize, AutomorphKeySerializable> =
         bincode::deserialize(&auto_keys_bytes)?;
 
-    let param = &*AES_TIGHT;
+    let param = AES_SET_2.clone(); 
 
     // Convert serializable automorph keys back to standard form
     let auto_keys: HashMap<usize, AutomorphKey<ABox<[c64]>>> = auto_keys_serialize
@@ -205,9 +195,9 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("lwe_ciphertext_list length is not a multiple of 16".into());
     }
     let num_chunks = total_bits / 16;
-    if num_chunks != 8 {
-        return Err("expected 8 chunks of 16 bits".into());
-    }
+    // if num_chunks != 8 {
+    //     return Err("expected 8 chunks of 16 bits".into());
+    // }
 
     let mut ggsw_chunks: Vec<GgswCiphertextList<Vec<u64>>> = Vec::with_capacity(num_chunks);
     for input_chunk in lwe_ciphertext_list.chunks_exact(16) {
@@ -300,7 +290,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         &lwe_chunks[1],
         &mut mid_lwe_list_2,
     );
-    for i in 2_usize..8 {
+    for i in 2_usize..num_chunks {
         let mut vec_glev = vec![
             GlweCiphertextList::new(
                 0,

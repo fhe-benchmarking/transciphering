@@ -4,7 +4,7 @@ io/
 third_party/
 measurements/
 harness/__pycache__/
-submission/target
+submission/target/
 
 # Prerequisites
 *.d
