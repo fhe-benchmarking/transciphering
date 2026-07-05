@@ -53,12 +53,7 @@ def main():
         gendata_seed = rng.integers(0,0x7fffffff)
         cmd.extend(["--seed", str(gendata_seed)])
     subprocess.run(cmd, check=True)
-    utils.log_step(1, "Dataset generation")
-
-    # 2. Client-side: Generate AES Key and encrypt the messages using the generated key
-    cmd = ["python3", harness_dir/"aes_keygen_and_encrypt.py", str(size)]
-    subprocess.run(cmd, check=True)
-    utils.log_step(2, "AES Key generation and message encryption with AES")
+    utils.log_step(1, "Dataset generation, AES Key generation and message encryption with AES")
 
     # Intermediate: Test correctness of cleartext implementation
     cmd = ["python3", harness_dir/"cleartext_impl.py", str(size)]
