@@ -11,12 +11,13 @@ utils.py - Scaffolding code for running the submission.
 """
 
 import sys
+import platform
 import subprocess
 import argparse
 import json
 from datetime import datetime
 from pathlib import Path
-from params import InstanceParams, TOY, MEDIUM
+from params import InstanceParams, TOY, LARGE
 from typing import Tuple
 
 # Global variable to track the last timestamp
@@ -33,12 +34,12 @@ def parse_submission_arguments(workload: str) -> Tuple[int, InstanceParams, int,
     """
     # Parse arguments using argparse
     parser = argparse.ArgumentParser(description=workload)
-    parser.add_argument('size', type=int, choices=range(TOY, MEDIUM+1),
+    parser.add_argument('size', type=int, choices=range(TOY, LARGE+1),
                         help='Instance size (0-toy/1-small/2-medium/3-large)')
     parser.add_argument('--num_runs', type=int, default=1,
                         help='Number of times to run steps 4-9 (default: 1)')
     parser.add_argument('--seed', type=int,
-                        help='Random seed for dataset and query generation')
+                        help='Random seed for dataset generation')
     parser.add_argument('--mini_workload', type=int, default=0,
                         help='Specify 0 for mini workload = max and 1 for mini workload = dot product.')
 
@@ -77,9 +78,10 @@ class TextFormat:
     YELLOW = "\033[33m"
     BLUE = "\033[34m"
     RED = "\033[31m"
+    PURPLE = "\033[35m"
     RESET = "\033[0m"
 
-def log_step(step_num: int, step_name: str, start: bool = False):
+def log_step(step_num: float, step_name: str, start: bool = False):
     """ 
     Helper function to print timestamp after each step with second precision 
     """
@@ -101,38 +103,62 @@ def log_step(step_num: int, step_name: str, start: bool = False):
     _last_timestamp = now
 
     if (not start):
-        print(f"{timestamp} [harness] {step_num}: {step_name} completed{elapsed_str}")
+        print(f"{TextFormat.BLUE}{timestamp} [harness] {step_num}: {step_name} completed{elapsed_str}{TextFormat.RESET}")
         _timestampsStr[step_name] = f"{round(elapsed_seconds, 4)}s"
         _timestamps[step_name] = elapsed_seconds
 
 def log_size(path: Path, object_name: str, flag: bool = False, previous: int = 0):
+    """Measure the size of a directory or file on disk"""
     global _bandwidth
-    size = int(subprocess.run(["du", "-sb", path], check=True,
+
+    if not path.exists():
+        size = 0
+    elif platform.system() == "Darwin":  # macOS
+        # Use -s for summary and multiply by 1024 since macOS du reports in 1K blocks by default
+        result = subprocess.run(["du", "-sk", path], check=True,
+                               capture_output=True, text=True)
+        size = int(result.stdout.split()[0]) * 1024
+    else:
+        # Linux/other systems support -b flag
+        size = int(subprocess.run(["du", "-sb", path], check=True,
                            capture_output=True, text=True).stdout.split()[0])
-    if(flag):
+    if flag:
         size -= previous
-    
-    print("         [harness]", object_name, "size:", human_readable_size(size))
+
+    print(f"{TextFormat.YELLOW}         [harness] {object_name} size: {human_readable_size(size)}{TextFormat.RESET}")
 
     _bandwidth[object_name] = human_readable_size(size)
     return size
 
 def human_readable_size(n: int):
+    """Pretty print for size in bytes"""
+    n_float : float = n
     for unit in ["B","K","M","G","T"]:
-        if n < 1024:
-            return f"{n:.1f}{unit}"
-        n /= 1024
-    return f"{n:.1f}P"
+        if n_float < 1024:
+            return f"{n_float:.1f}{unit}"
+        n_float /= 1024
+    return f"{n_float:.1f}P"
 
-def save_run(path: Path):
+def save_run(path: Path, submission_report_path: Path):
+    """Save the timing from the current run to disk"""
     global _timestamps
     global _timestampsStr
     global _bandwidth
 
+    _timestampsStr["Total"] = f"{round(sum(_timestamps.values()), 4)}s"
+
+    _timestampsRemote = {}
+    if submission_report_path.exists():
+        with open(submission_report_path, "r") as f:
+            server_reported_times = json.load(f)
+            for step_name, time_str in server_reported_times.items():
+                _timestampsRemote[step_name] = f"{time_str}s"
+                print(f"{TextFormat.PURPLE}         [submission] {step_name}: {time_str}s{TextFormat.RESET}")
+
     json.dump({
-        "total_latency_s": round(sum(_timestamps.values()), 4),
-        "per_stage": _timestampsStr,
-        "bandwidth": _bandwidth,
+        "Timing": _timestampsStr,
+        "Bandwidth": _bandwidth,
+        "Server Reported": _timestampsRemote,
     }, open(path,"w"), indent=2)
 
     print("[total latency]", f"{round(sum(_timestamps.values()), 4)}s")

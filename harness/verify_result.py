@@ -12,6 +12,7 @@ verify_result.py - correctness oracle for add-two-ints
 
 import sys
 from pathlib import Path
+from utils import TextFormat
 
 def main():
 
@@ -37,10 +38,10 @@ def main():
         sys.exit(1)
 
     if exp == res:
-        print(f"[harness] PASS{label}  (expected={exp}, got={res})")
+        print(f"{TextFormat.GREEN}         [harness] PASS{label}  (expected={exp}, got={res}){TextFormat.RESET}")
         sys.exit(0)
     else:
-        print(f"[harness] FAIL{label}  (expected={exp}, got={res})")
+        print(f"{TextFormat.RED}         [harness] FAIL{label}  (expected={exp}, got={res}){TextFormat.RESET}")
         sys.exit(1)
 
 if __name__ == "__main__":

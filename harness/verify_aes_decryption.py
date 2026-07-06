@@ -12,6 +12,7 @@ verify_aes_decryption.py - correctness oracle for AES decryptions
 
 import sys
 from pathlib import Path
+from utils import TextFormat
 
 def find_mismatches(list1, list2):
     """
@@ -60,11 +61,11 @@ def main():
         sys.exit(1)
 
     if exp == res:
-        print(f"[harness] PASS AES Decryption")
+        print(f"{TextFormat.GREEN}         [harness] PASS AES Decryption{TextFormat.RESET}")
         sys.exit(0)
     else:
         mismatches = find_mismatches(exp, res)
-        print(f"[harness] FAIL AES Decryption  (find_mismatches): {mismatches}")
+        print(f"{TextFormat.RED}         [harness] FAIL AES Decryption  (find_mismatches): {mismatches}{TextFormat.RESET}")
         sys.exit(1)
 
 if __name__ == "__main__":
