@@ -3,6 +3,9 @@ name = "submission"
 version = "0.1.0"
 edition = "2021"
 
+[lints.rust]
+warnings = "allow"
+
 [dependencies]
 bincode = "1.3"
 rand = { version = "0.9.1" }

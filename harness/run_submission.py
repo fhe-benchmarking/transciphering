@@ -23,7 +23,7 @@ def main():
     
     # 0. Prepare running
     # Get the arguments
-    size, params, seed, num_runs, clrtxt, mini_workload = utils.parse_submission_arguments('Run the add-two-values FHE benchmark.')
+    size, params, seed, num_runs, mini_workload = utils.parse_submission_arguments('Run the AES-transciphering FHE benchmark.')
     test = instance_name(size)
     print(f"\n[harness] Running submission for {test} dataset")
 
@@ -83,60 +83,68 @@ def main():
     subprocess.run([exec_dir/"server_preprocess_dataset", str(size)], check=True)
     utils.log_step(6, "(Encrypted) dataset preprocessing")    
 
-    # 7. Server side: Run aes_decryption 
-    subprocess.run([exec_dir/"server_encrypted_aes_decryption", str(size)], check=True)
-    utils.log_step(7, "Encrypted aes decryption")
-    utils.log_size(io_dir / "ciphertext_aes_download", "Encrypted results")
+    # Run steps 7-14 multiple times if requested. The computation is deterministic, so
+    # the results are identical every run; only the timings vary.
+    for run in range(num_runs):
+        if num_runs > 1:
+            print(f"\n         [harness] Run {run+1} of {num_runs}")
 
-    # 8. Server side: Run the encrypted processing run exec_dir/server_encrypted_compute
-    subprocess.run([exec_dir/"server_encrypted_compute", str(size)], check=True)
-    utils.log_step(8, "Encrypted computation of mini workload")
-    utils.log_size(io_dir / "ciphertexts_download", "Encrypted results")
+        # 7. Server side: Run aes_decryption
+        subprocess.run([exec_dir/"server_encrypted_aes_decryption", str(size)], check=True)
+        utils.log_step(7, "Encrypted aes decryption")
+        utils.log_size(io_dir / "ciphertext_aes_download", "Encrypted results")
 
-    # 9. Client-side: decrypt
-    subprocess.run([exec_dir/"client_decrypt_decode_aes_decryption", str(size)], check=True)
-    utils.log_step(9, "Result decryption")
+        # 8. Server side: Run the encrypted processing run exec_dir/server_encrypted_compute
+        subprocess.run([exec_dir/"server_encrypted_compute", str(size)], check=True)
+        utils.log_step(8, "Encrypted computation of mini workload")
+        utils.log_size(io_dir / "ciphertexts_download", "Encrypted results")
 
-    # 10. Client-side: post-process
-    subprocess.run([exec_dir/"client_postprocess_aes_decryption", str(size)], check=True)
-    utils.log_step(10, "Result postprocessing")
+        # 9. Client-side: decrypt
+        subprocess.run([exec_dir/"client_decrypt_decode_aes_decryption", str(size)], check=True)
+        utils.log_step(9, "Result decryption")
 
-    # 11. Client-side: decrypt
-    subprocess.run([exec_dir/"client_decrypt_decode", str(size)], check=True)
-    utils.log_step(11, "Result decryption")
+        # 10. Client-side: post-process
+        subprocess.run([exec_dir/"client_postprocess_aes_decryption", str(size)], check=True)
+        utils.log_step(10, "Result postprocessing")
 
-    # 12. Client-side: post-process
-    subprocess.run([exec_dir/"client_postprocess", str(size)], check=True)
-    utils.log_step(12, "Result postprocessing")
+        # 11. Client-side: decrypt
+        subprocess.run([exec_dir/"client_decrypt_decode", str(size)], check=True)
+        utils.log_step(11, "Result decryption")
 
-    # 13. Verify aes_decryption result
-    aes_expected_file = params.datadir() / "expected_aes.txt"
-    aes_result_file = io_dir / "result_aes.txt"
+        # 12. Client-side: post-process
+        subprocess.run([exec_dir/"client_postprocess", str(size)], check=True)
+        utils.log_step(12, "Result postprocessing")
 
-    if not aes_result_file.exists():
-        print(f"Error: Result file {aes_result_file} not found")
-        sys.exit(1)
+        # 13. Verify aes_decryption result
+        aes_expected_file = params.datadir() / "expected_aes.txt"
+        aes_result_file = io_dir / "result_aes.txt"
 
-    subprocess.run(["python3", harness_dir/"verify_aes_decryption.py",
-            str(aes_expected_file), str(aes_result_file)], check=False)
-    
-    # 14. Verify the final result
-    expected_file = params.datadir() / "max_value.txt"
-    if mini_workload == 1:
-        expected_file = params.datadir() / "inner_product.txt"
-    result_file = io_dir / "result.txt"
+        if not aes_result_file.exists():
+            print(f"Error: Result file {aes_result_file} not found")
+            sys.exit(1)
 
-    if not result_file.exists():
-        print(f"Error: Result file {result_file} not found")
-        sys.exit(1)
+        subprocess.run(["python3", harness_dir/"verify_aes_decryption.py",
+                str(aes_expected_file), str(aes_result_file)], check=False)
 
-    subprocess.run(["python3", harness_dir/"verify_result.py",
-            str(expected_file), str(result_file)], check=False)
-    
-    # 15. Store measurements
-    run_path = params.measuredir() / f"results.json"
-    run_path.parent.mkdir(parents=True, exist_ok=True)
-    utils.save_run(run_path)
+        # 14. Verify the final result
+        expected_file = params.datadir() / "max_value.txt"
+        workload_label = "MAX"
+        if mini_workload == 1:
+            expected_file = params.datadir() / "inner_product.txt"
+            workload_label = "IP"
+        result_file = io_dir / "result.txt"
+
+        if not result_file.exists():
+            print(f"Error: Result file {result_file} not found")
+            sys.exit(1)
+
+        subprocess.run(["python3", harness_dir/"verify_result.py",
+                str(expected_file), str(result_file), workload_label], check=False)
+
+        # 15. Store this run's measurements
+        run_path = params.measuredir() / f"results-{run+1}.json"
+        run_path.parent.mkdir(parents=True, exist_ok=True)
+        utils.save_run(run_path)
 
     print(f"\nAll steps completed for the {instance_name(size)} dataset!")
 

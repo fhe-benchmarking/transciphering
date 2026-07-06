@@ -16,16 +16,18 @@ from pathlib import Path
 def main():
 
     """
-    Usage:  python3 verify_result.py  <expected_file>  <result_file>
+    Usage:  python3 verify_result.py  <expected_file>  <result_file>  [label]
     Returns exit-code 0 if equal, 1 otherwise.
-    Prints a message so the caller can log it.
+    Prints a message so the caller can log it. The optional label (e.g. MAX or
+    IP) identifies which mini workload was verified.
     """
 
-    if len(sys.argv) != 3:
-        sys.exit("Usage: verify_result.py <expected> <result>")
+    if len(sys.argv) not in (3, 4):
+        sys.exit("Usage: verify_result.py <expected> <result> [label]")
 
     expected_file = Path(sys.argv[1])
     result_file   = Path(sys.argv[2])
+    label = f" {sys.argv[3]}" if len(sys.argv) == 4 else ""
 
     try:
         exp = list(map(int, expected_file.read_text().split()))
@@ -35,10 +37,10 @@ def main():
         sys.exit(1)
 
     if exp == res:
-        print(f"[harness] PASS  (expected={exp}, got={res})")
+        print(f"[harness] PASS{label}  (expected={exp}, got={res})")
         sys.exit(0)
     else:
-        print(f"[harness] FAIL  (expected={exp}, got={res})")
+        print(f"[harness] FAIL{label}  (expected={exp}, got={res})")
         sys.exit(1)
 
 if __name__ == "__main__":

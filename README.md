@@ -46,7 +46,7 @@ An example run is provided below.
 
 ```console
 $ python3 harness/run_submission.py -h
-usage: run_submission.py [-h] [--num_runs NUM_RUNS] [--seed SEED] [--clrtxt CLRTXT] {0,1,2,3}
+usage: run_submission.py [-h] [--num_runs NUM_RUNS] [--seed SEED] {0,1,2,3}
 
 Run the AES transciphering FHE benchmark.
 
@@ -57,7 +57,6 @@ options:
   -h, --help           show this help message and exit
   --num_runs NUM_RUNS  Number of times to run steps 4-9 (default: 1)
   --seed SEED          Random seed for dataset and query generation
-  --clrtxt CLRTXT      Specify with 1 if to rerun the cleartext computation
 
 $ python3 ./harness/run_submission.py 2 --seed 3 --num_runs 2
 
