@@ -853,17 +853,19 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let result_path = format!("{}/result.bin", ciphertext_download_dir);
         fs::write(&result_path, bincode::serialize(&result)?)?;
-    } else if size == "1" || size == "2" {
+    } else if size == "1" || size == "2" || size == "3" {
         let trans_key: AllRdKeys2 = bincode::deserialize(&trans_key_bytes)?;
 
         // Load AES ciphertext from hex file
         let aes_cipher_hex_path = format!("{}/db.hex", data_dir);
         let hex_string = fs::read_to_string(&aes_cipher_hex_path)?.trim().to_string();
-        let cipher_size = if size == "1" { 128 } else { 1024 };
-        let mut aes_cipher = vec![0u8; cipher_size];
-        for (i, byte) in aes_cipher.iter_mut().enumerate() {
+        if hex_string.len() % 32 != 0 {
+            return Err(format!("Invalid ciphertext length. Expected a multiple of 32 hex characters (16 bytes), but got {}", hex_string.len()).into());
+        }
+        let mut aes_cipher = Vec::with_capacity(hex_string.len() / 2);
+        for i in 0..(hex_string.len() / 2) {
             let hex_pair = &hex_string[i * 2..i * 2 + 2];
-            *byte = u8::from_str_radix(hex_pair, 16)?;
+            aes_cipher.push(u8::from_str_radix(hex_pair, 16)?);
         }
 
         let aes_iv_path = format!("{}/aes_iv.hex", data_dir);
@@ -935,7 +937,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         let result_path = format!("{}/result.bin", ciphertext_download_dir);
         fs::write(&result_path, bincode::serialize(&merged_result)?)?;
     } else {
-        return Err(format!("Invalid size argument: {}. Expected 0, 1, or 2.", size).into());
+        return Err(format!("Invalid size argument: {}. Expected 0, 1, 2, or 3.", size).into());
     }
 
     Ok(())
