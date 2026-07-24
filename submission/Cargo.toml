@@ -1,0 +1,51 @@
+[package]
+name = "submission"
+version = "0.1.0"
+edition = "2021"
+
+[lints.rust]
+warnings = "allow"
+
+[dependencies]
+bincode = "1.3"
+rand = { version = "0.9.1" }
+auto-base-conv = { version = "0.1.0", path="./cbs_lib"}
+tfhe = { version = "0.5.3", features = ["boolean", "shortint", "x86_64-unix"] }
+chrono = { version = "0.4" }
+aligned-vec = { version = "0.5.0" }
+serde = { version = "1", features = ["derive"] }
+aes = "0.8.4"
+itertools = "0.14.0"
+rayon = "1.10"
+
+
+
+[[bin]]
+name = "client_preprocess"
+
+[[bin]]
+name = "client_key_generation"
+
+[[bin]]
+name = "client_encode_encrypt"
+
+[[bin]]
+name = "server_preprocess_dataset"
+
+[[bin]]
+name = "server_encrypted_aes_decryption"
+
+[[bin]]
+name = "server_encrypted_compute"
+
+[[bin]]
+name = "client_decrypt_decode_aes_decryption"
+
+[[bin]]
+name = "client_decrypt_decode"
+
+[[bin]]
+name = "client_postprocess_aes_decryption"
+
+[[bin]]
+name = "client_postprocess"

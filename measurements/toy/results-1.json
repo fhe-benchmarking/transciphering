@@ -1,0 +1,21 @@
+{
+  "Timing": {
+    "Dataset generation, AES Key generation and message encryption with AES": "0.163s",
+    "Cleartext implementation": "0.0311s",
+    "Client side preprocessing": "0.0012s",
+    "FHE Key Generation": "2.3041s",
+    "AES key encoding and encryption": "0.0945s",
+    "(Encrypted) dataset preprocessing": "0.0032s",
+    "Encrypted aes decryption": "25.5735s",
+    "Encrypted computation of mini workload": "5.4911s",
+    "Result decryption": "0.0012s",
+    "Result postprocessing": "0.0009s",
+    "Total": "33.6638s"
+  },
+  "Bandwidth": {
+    "Public and evaluation keys": "115.6M",
+    "Encrypted aes-encrypted dataset": "27.8M",
+    "Encrypted results": "260.2K"
+  },
+  "Server Reported": {}
+}
