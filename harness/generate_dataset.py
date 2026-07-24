@@ -15,7 +15,7 @@ import aes
 from utils import parse_submission_arguments
 
 def main():
-    __, params, seed, __, __, __ = parse_submission_arguments('Generate dataset for FHE benchmark.')
+    __, params, seed, __, __ = parse_submission_arguments('Generate dataset for FHE benchmark.')
     DATASET_PATH = params.datadir() / f"db.txt"
     AES_KEY_PATH = params.datadir() / f"aes_key.hex"
     IV_PATH = params.datadir() / f"aes_iv.hex"

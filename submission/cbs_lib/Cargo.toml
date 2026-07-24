@@ -3,6 +3,9 @@ name = "auto-base-conv"
 version = "0.1.0"
 edition = "2021"
 
+[lints.rust]
+warnings = "allow"
+
 
 [dependencies]
 tfhe = { version = "0.5.3", features = ["boolean", "shortint", "x86_64-unix"] }
