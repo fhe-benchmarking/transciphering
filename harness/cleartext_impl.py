@@ -14,7 +14,8 @@ For each test case:
     - Re-encrypts it using aes library to sanity check
     - Decrypts the ciphertext using aes library to get the plaintext block(s)
     - Writes the result to expected_aes.txt
-    - Computes and writes min/max logic to test results
+    - Computes and writes the expected mini-workload outputs
+      (max_value.txt and inner_product.txt)
 """
 import struct
 import aes
@@ -22,7 +23,7 @@ from utils import parse_submission_arguments
 
 def main():
 
-    __, params, __, __, __ = parse_submission_arguments('Generate dataset for FHE benchmark.')
+    __, params, __, __, __ = parse_submission_arguments('Cleartext reference for the AES-transciphering FHE benchmark.')
     DATASET_PATH = params.datadir() / f"db.txt"
     DATASET_ENC_PATH = params.datadir() / f"db.hex"
     AES_KEY_PATH = params.datadir() / f"aes_key.hex"

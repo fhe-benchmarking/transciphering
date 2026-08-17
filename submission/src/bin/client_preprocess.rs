@@ -6,11 +6,9 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("Usage: {} <size>", args[0]);
         std::process::exit(1); 
     }
-    let size = args[1].clone();
-    let io_dir = "io/".to_owned() + &size;
-    
-    // TODO: Add implementation.
-    println!("Implement code in client_preprocess.rs");
+    let _size = args[1].clone();
+
+    // No client-side preprocessing is needed in the reference implementation.
 
     Ok(())
 }

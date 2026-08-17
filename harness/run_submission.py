@@ -46,7 +46,7 @@ def main():
     utils.log_step(0, "Init", True)
 
     # 1. Client-side: Generate the datasets (message to be encrypted with AES)
-    cmd = ["python3", harness_dir/"generate_dataset.py", str(size)]
+    cmd = [sys.executable, harness_dir/"generate_dataset.py", str(size)]
     # Use seed if provided
     if seed is not None:
         rng = np.random.default_rng(seed)
@@ -56,7 +56,7 @@ def main():
     utils.log_step(1, "Dataset generation, AES Key generation and message encryption with AES")
 
     # Intermediate: Test correctness of cleartext implementation
-    cmd = ["python3", harness_dir/"cleartext_impl.py", str(size)]
+    cmd = [sys.executable, harness_dir/"cleartext_impl.py", str(size)]
     subprocess.run(cmd, check=True)
     utils.log_step(2, "Cleartext implementation")
 
@@ -123,7 +123,7 @@ def main():
             print(f"Error: Result file {aes_result_file} not found")
             sys.exit(1)
 
-        subprocess.run(["python3", harness_dir/"verify_aes_decryption.py",
+        subprocess.run([sys.executable, harness_dir/"verify_aes_decryption.py",
                 str(aes_expected_file), str(aes_result_file)], check=False)
 
         # 14. Verify the final result
@@ -138,11 +138,11 @@ def main():
             print(f"Error: Result file {result_file} not found")
             sys.exit(1)
 
-        subprocess.run(["python3", harness_dir/"verify_result.py",
+        subprocess.run([sys.executable, harness_dir/"verify_result.py",
                 str(expected_file), str(result_file), workload_label], check=False)
 
         # 15. Store this run's measurements
-        run_path = params.measuredir() / f"results-{run+1}.json"
+        run_path = params.measuredir(mini_workload) / f"results-{run+1}.json"
         run_path.parent.mkdir(parents=True, exist_ok=True)
         submission_report_path = io_dir / "server_reported_steps.json"
         utils.save_run(run_path, submission_report_path)

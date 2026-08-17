@@ -37,11 +37,11 @@ def parse_submission_arguments(workload: str) -> Tuple[int, InstanceParams, int,
     parser.add_argument('size', type=int, choices=range(TOY, LARGE+1),
                         help='Instance size (0-toy/1-small/2-medium/3-large)')
     parser.add_argument('--num_runs', type=int, default=1,
-                        help='Number of times to run steps 4-9 (default: 1)')
+                        help='Number of times to run steps 7-14 (default: 1)')
     parser.add_argument('--seed', type=int,
                         help='Random seed for dataset generation')
     parser.add_argument('--mini_workload', type=int, default=0,
-                        help='Specify 0 for mini workload = max and 1 for mini workload = dot product.')
+                        help='Mini-workload to verify: 0 for the maximum, 1 for the inner product (default: 0)')
 
     args = parser.parse_args()
     size = args.size
@@ -67,9 +67,7 @@ def build_submission(script_dir: Path):
     """
     Build the submission, including pulling dependencies as neeed
     """
-    # # Uncomment to clone and build OpenFHE as part of the harness if wanted
-    # subprocess.run([script_dir/"get_openfhe.sh"], check=True)
-    # CMake build of the submission itself
+    # Install the Rust toolchain if needed, then build the submission with cargo
     subprocess.run([script_dir/"build_task.sh", "./submission"], check=True)
 
 class TextFormat:
@@ -172,7 +170,7 @@ def run_exe_or_python(base, file_name, *args, check=True):
     exe = base / "build" / file_name
 
     if py.exists():
-        cmd = ["python3", py, *args]
+        cmd = [sys.executable, py, *args]
     elif exe.exists():
         cmd = [exe, *args]
     else:
