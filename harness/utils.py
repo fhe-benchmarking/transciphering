@@ -10,6 +10,7 @@
 utils.py - Scaffolding code for running the submission.
 """
 
+import os
 import sys
 import platform
 import subprocess
@@ -28,6 +29,32 @@ _timestampsStr = {}
 # Global variable to store measured sizes
 _bandwidth = {}
 
+def ensure_python_dependencies():
+    """
+    Check that the Python packages required by the harness are importable.
+    If they are missing but the repository's virtualenv exists, re-execute the
+    current script with the virtualenv's interpreter; otherwise print
+    installation instructions and exit.
+    """
+    try:
+        import numpy   # noqa: F401
+        import pyaes   # noqa: F401
+        return
+    except ModuleNotFoundError as e:
+        missing = e.name
+    venv_python = Path(__file__).resolve().parent.parent / "virtualenv" / "bin" / "python3"
+    if venv_python.exists() and os.environ.get("_HARNESS_REEXEC") != "1":
+        print(f"[harness] Python package '{missing}' not found with {sys.executable}, "
+              f"retrying with {venv_python}", flush=True)
+        os.environ["_HARNESS_REEXEC"] = "1"
+        os.execv(str(venv_python), [str(venv_python), *sys.argv])
+    print(f"Error: required Python package '{missing}' is not installed. "
+          "Install the harness dependencies first:\n"
+          "    python3 -m venv virtualenv\n"
+          "    source ./virtualenv/bin/activate\n"
+          "    pip3 install -r requirements.txt")
+    sys.exit(1)
+
 def parse_submission_arguments(workload: str) -> Tuple[int, InstanceParams, int, int, int]:
     """
     Get the arguments of the submission. Populate arguments as needed for the workload.
@@ -37,11 +64,11 @@ def parse_submission_arguments(workload: str) -> Tuple[int, InstanceParams, int,
     parser.add_argument('size', type=int, choices=range(TOY, LARGE+1),
                         help='Instance size (0-toy/1-small/2-medium/3-large)')
     parser.add_argument('--num_runs', type=int, default=1,
-                        help='Number of times to run steps 4-9 (default: 1)')
+                        help='Number of times to run steps 7-14 (default: 1)')
     parser.add_argument('--seed', type=int,
                         help='Random seed for dataset generation')
     parser.add_argument('--mini_workload', type=int, default=0,
-                        help='Specify 0 for mini workload = max and 1 for mini workload = dot product.')
+                        help='Mini-workload to verify: 0 for the maximum, 1 for the inner product (default: 0)')
 
     args = parser.parse_args()
     size = args.size
@@ -67,9 +94,7 @@ def build_submission(script_dir: Path):
     """
     Build the submission, including pulling dependencies as neeed
     """
-    # # Uncomment to clone and build OpenFHE as part of the harness if wanted
-    # subprocess.run([script_dir/"get_openfhe.sh"], check=True)
-    # CMake build of the submission itself
+    # Install the Rust toolchain if needed, then build the submission with cargo
     subprocess.run([script_dir/"build_task.sh", "./submission"], check=True)
 
 class TextFormat:
@@ -168,14 +193,16 @@ def run_exe_or_python(base, file_name, *args, check=True):
         If {base}/{file_name}.py exists, run it with the current Python.
         Otherwise, run {base}/build/{file_name} as an executable.
     """
-    py = base / f"{file_name}.py"
+    py =  base / f"{file_name}.py"
     exe = base / "build" / file_name
+    env = os.environ.copy()
 
     if py.exists():
-        cmd = ["python3", py, *args]
+        env["PYTHONPATH"] = "."
+        cmd = [sys.executable, py, *args]
     elif exe.exists():
         cmd = [exe, *args]
     else:
         cmd = None
     if cmd is not None:
-        subprocess.run(cmd, check=check)
+        subprocess.run(cmd, check=check, env=env)

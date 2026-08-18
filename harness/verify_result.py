@@ -7,7 +7,7 @@
 # See the LICENSE.md file for details.
 
 """
-verify_result.py - correctness oracle for add-two-ints
+verify_result.py - correctness oracle for the mini-workload result
 """
 
 import sys

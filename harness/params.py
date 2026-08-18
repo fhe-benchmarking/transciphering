@@ -62,6 +62,9 @@ class InstanceParams:
         """Return the I/O directory path."""
         return self.rootdir / "io" / instance_name(self.size)
     
-    def measuredir(self):
-        """Return the measurements directory path."""
-        return self.rootdir / "measurements" / instance_name(self.size)
+    def measuredir(self, mini_workload=0):
+        """Return the measurements directory path. Runs of the maximum
+        mini-workload (0) use the instance name directly; runs of the
+        inner-product mini-workload (1) use an ip_-prefixed subdirectory."""
+        prefix = "ip_" if mini_workload == 1 else ""
+        return self.rootdir / "measurements" / (prefix + instance_name(self.size))
