@@ -8,6 +8,5 @@ Before submitting your implementation, run the `run_submission.py` script with a
 
 ## Results for the reference implementation
 
-The sub-directories `toy` and `small` contain the results of the reference implementation
-(three runs each, with the maximum mini-workload), generated in July 2026. The reference
-implementation supports the toy, small and medium instance sizes.
+The sub-directories `toy`, `small` and `medium` contain the results of the reference implementation
+(three runs each, with the maximum mini-workload). The measurements were run on GCP c3-highmem-176 (176 vCPUs, 1,408 GB Memory).

@@ -1,16 +1,16 @@
 {
   "Timing": {
-    "Dataset generation, AES Key generation and message encryption with AES": "0.1525s",
-    "Cleartext implementation": "0.0353s",
-    "Client side preprocessing": "0.001s",
-    "FHE Key Generation": "2.3615s",
-    "AES key encoding and encryption": "0.2025s",
+    "Dataset generation, AES Key generation and message encryption with AES": "0.1036s",
+    "Cleartext implementation": "0.0394s",
+    "Client side preprocessing": "0.0007s",
+    "FHE Key Generation": "3.1977s",
+    "AES key encoding and encryption": "0.2851s",
     "(Encrypted) dataset preprocessing": "0.003s",
-    "Encrypted aes decryption": "109.9047s",
-    "Encrypted computation of mini workload": "92.7831s",
-    "Result decryption": "0.0021s",
-    "Result postprocessing": "0.0016s",
-    "Total": "205.4475s"
+    "Encrypted aes decryption": "35.9265s",
+    "Encrypted computation of mini workload": "126.8942s",
+    "Result decryption": "0.0013s",
+    "Result postprocessing": "0.0009s",
+    "Total": "166.4524s"
   },
   "Bandwidth": {
     "Public and evaluation keys": "115.6M",
